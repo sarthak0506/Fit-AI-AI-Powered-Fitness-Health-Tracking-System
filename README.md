@@ -32,7 +32,7 @@ Fit-AI is an AI-powered fitness and health tracking platform developed using Dja
 
 ##  System Architecture
 
-![System Architecture](images/system_architecture.png)
+![System Architecture](images/architecture.png)
 
 ## Project Modules
 
