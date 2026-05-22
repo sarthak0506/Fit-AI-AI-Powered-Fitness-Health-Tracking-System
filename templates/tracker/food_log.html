@@ -1,0 +1,305 @@
+{% extends 'base.html' %}
+{% block title %}Food Log — FitAI{% endblock %}
+{% block nav_food %}active{% endblock %}
+{% block extra_css %}
+<style>
+.upload-zone {
+  border:2px dashed var(--border); border-radius:var(--radius);
+  padding:40px; text-align:center; cursor:pointer;
+  transition:all .2s; background:var(--bg2); position:relative;
+}
+.upload-zone:hover { border-color:var(--accent); background:rgba(108,99,255,.05); }
+.upload-zone i { font-size:40px; color:var(--muted); margin-bottom:12px; display:block; }
+.upload-zone p { color:var(--muted); font-size:14px; margin-bottom:4px; }
+.upload-zone strong { color:var(--accent2); }
+#preview-wrap { display:none; margin-top:16px; position:relative; }
+#preview-img { width:100%; max-height:240px; border-radius:10px; object-fit:cover; border:1px solid var(--border); }
+.preview-remove {
+  position:absolute; top:8px; right:8px;
+  background:rgba(0,0,0,.6); color:#fff; border:none;
+  border-radius:50%; width:28px; height:28px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; font-size:13px;
+}
+.spinner { display:none; text-align:center; padding:24px; }
+.spinner i { font-size:32px; color:var(--accent); animation:spin 1s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+.log-card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; margin-bottom:16px; transition:box-shadow .2s; }
+.log-card:hover { box-shadow:0 0 0 1px var(--accent); }
+.log-card-header { padding:14px 18px; display:flex; justify-content:space-between; align-items:center; background:var(--card); border-bottom:1px solid var(--border); }
+.log-card-body { padding:16px 18px; }
+
+.detected-img-wrap { position:relative; margin-bottom:14px; border-radius:10px; overflow:hidden; }
+.detected-img { width:100%; max-height:220px; object-fit:cover; display:block; border-radius:10px; border:1px solid var(--border); }
+.detected-img-label {
+  position:absolute; bottom:0; left:0; right:0;
+  background:linear-gradient(transparent, rgba(0,0,0,.75));
+  padding:20px 12px 10px; font-size:12px; color:#fff;
+  display:flex; align-items:center; gap:6px;
+}
+
+.food-item { display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border); }
+.food-item:last-child { border-bottom:none; }
+.food-dot { width:8px; height:8px; border-radius:50%; background:var(--accent); margin-right:10px; flex-shrink:0; }
+
+.empty-state { text-align:center; padding:50px 20px; color:var(--muted); }
+.empty-state i { font-size:44px; margin-bottom:16px; display:block; opacity:.5; }
+.empty-state p { font-size:14px; }
+
+.summary-row { display:flex; justify-content:space-between; align-items:center; padding-top:10px; margin-top:6px; border-top:1px solid var(--border); }
+
+/* Confidence bar */
+.conf-bar { height:3px; border-radius:99px; background:var(--bg3); margin-top:4px; overflow:hidden; }
+.conf-fill { height:100%; border-radius:99px; background:linear-gradient(90deg,var(--accent),var(--green)); }
+
+/* No image placeholder */
+.no-img-placeholder {
+  width:100%; height:100px; background:var(--bg3);
+  border-radius:10px; display:flex; align-items:center;
+  justify-content:center; margin-bottom:14px;
+  border:1px dashed var(--border); color:var(--muted);
+  font-size:13px; gap:8px;
+}
+
+/* Stats strip */
+.stats-strip {
+  display:flex; gap:12px; padding:10px 0; margin-bottom:4px;
+  border-bottom:1px solid var(--border);
+}
+.stats-strip .ss { font-size:12px; color:var(--muted); display:flex; align-items:center; gap:5px; }
+.stats-strip .ss span { color:var(--text); font-weight:600; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Food Log</h1>
+  <p>Upload a meal photo — AI detects food and estimates calories automatically</p>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start;">
+
+  <!-- ── Upload card ── -->
+  <div class="card" style="position:sticky;top:24px;">
+    <div class="card-title">Log a meal</div>
+    <form method="post" enctype="multipart/form-data" id="upload-form">
+      {% csrf_token %}
+      <div class="form-group">
+        <label>Meal type</label>
+        <select name="meal_type" class="form-control">
+          <option value="breakfast">🌅 Breakfast</option>
+          <option value="lunch">🍽️ Lunch</option>
+          <option value="snack">🍎 Snack</option>
+          <option value="dinner">🌙 Dinner</option>
+          <option value="meal">🍴 Other</option>
+        </select>
+      </div>
+
+      <div class="upload-zone" id="drop-zone" onclick="document.getElementById('img-input').click()">
+        <i class="fa-solid fa-camera-retro"></i>
+        <p>Click or drag &amp; drop your meal photo</p>
+        <p><strong>JPG, PNG up to 10MB</strong></p>
+      </div>
+      <input type="file" name="image" id="img-input" accept="image/*" style="display:none" required/>
+
+      <div id="preview-wrap">
+        <img id="preview-img" src="" alt="preview"/>
+        <button type="button" class="preview-remove" onclick="removePreview()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="spinner" id="spinner">
+        <i class="fa-solid fa-circle-notch"></i>
+        <p style="margin-top:10px;color:var(--muted);font-size:13px;">AI is detecting your food...</p>
+        <p style="color:var(--muted);font-size:12px;margin-top:4px;">This may take 10-20 seconds</p>
+      </div>
+
+      <button class="btn btn-primary" type="submit" id="submit-btn"
+        style="width:100%;justify-content:center;margin-top:16px;padding:13px;">
+        <i class="fa-solid fa-wand-magic-sparkles"></i> Detect &amp; log meal
+      </button>
+    </form>
+
+    <!-- Tips -->
+    <div style="margin-top:20px;padding:14px;background:rgba(108,99,255,.08);border:1px solid rgba(108,99,255,.2);border-radius:10px;">
+      <div style="font-size:12px;font-weight:600;color:var(--accent2);margin-bottom:8px;">
+        <i class="fa-solid fa-lightbulb"></i> Tips for better detection
+      </div>
+      <ul style="font-size:12px;color:var(--muted);padding-left:16px;line-height:1.8;">
+        <li>Use good lighting — avoid dark photos</li>
+        <li>Show food clearly from above</li>
+        <li>One plate at a time works best</li>
+        <li>Indian foods work great with this model!</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ── Recent logs ── -->
+  <div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <div class="card-title" style="margin:0;">Recent logs</div>
+      {% if logs %}
+      <span style="font-size:12px;color:var(--muted);">{{ logs|length }} meal{{ logs|length|pluralize }} logged</span>
+      {% endif %}
+    </div>
+
+    {% if logs %}
+      {% for log in logs %}
+      <div class="log-card">
+        <div class="log-card-header">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:18px;">
+              {% if log.meal_type == 'breakfast' %}🌅
+              {% elif log.meal_type == 'lunch' %}🍽️
+              {% elif log.meal_type == 'snack' %}🍎
+              {% elif log.meal_type == 'dinner' %}🌙
+              {% else %}🍴{% endif %}
+            </span>
+            <div>
+              <div style="font-weight:600;font-size:14px;">{{ log.meal_type|title }}</div>
+              <div style="color:var(--muted);font-size:11px;">{{ log.logged_at|date:"d M Y, h:i A" }}</div>
+            </div>
+          </div>
+          <div style="text-align:right;">
+            <span class="badge badge-purple">{{ log.total_kcal }} kcal</span>
+            <div style="font-size:11px;color:var(--green);margin-top:4px;">{{ log.total_protein }}g protein</div>
+          </div>
+        </div>
+
+        <div class="log-card-body">
+
+          <!-- Detected image with bounding boxes -->
+          {% if log.image %}
+            <div class="detected-img-wrap">
+              <img class="detected-img"
+                src="/media/{{ log.image }}"
+                alt="detected meal"
+                onerror="this.closest('.detected-img-wrap').innerHTML='<div class=\'no-img-placeholder\'><i class=\'fa-solid fa-image\'></i> Image not available</div>'"
+              />
+              <div class="detected-img-label">
+                <i class="fa-solid fa-wand-magic-sparkles" style="color:var(--accent2);"></i>
+                AI detected {{ log.get_detected|length }} item{{ log.get_detected|length|pluralize }}
+              </div>
+            </div>
+          {% else %}
+            <div class="no-img-placeholder">
+              <i class="fa-solid fa-image"></i> No image available
+            </div>
+          {% endif %}
+
+          <!-- Detected foods list -->
+          {% for item in log.get_detected %}
+          <div class="food-item">
+            <div style="flex:1;">
+              <div style="display:flex;align-items:center;">
+                <div class="food-dot"></div>
+                <span style="font-size:14px;font-weight:500;">{{ item.food|title }}</span>
+              </div>
+              <div style="padding-left:18px;margin-top:3px;">
+                <div class="conf-bar" style="width:80px;">
+                  <div class="conf-fill" style="width:{{ item.confidence|floatformat:0 }}00%;"></div>
+                </div>
+              </div>
+            </div>
+            <div style="text-align:right;display:flex;align-items:center;gap:8px;">
+              <span style="font-size:12px;color:var(--muted);">{{ item.portion_g }}g</span>
+              <span class="badge badge-amber">{{ item.calories_kcal }} kcal</span>
+              <span class="badge badge-green">{{ item.protein_g }}g P</span>
+            </div>
+          </div>
+          {% empty %}
+          <div style="text-align:center;padding:16px;color:var(--muted);font-size:13px;">
+            <i class="fa-solid fa-circle-exclamation" style="margin-right:6px;"></i>
+            No food detected in this image
+          </div>
+          {% endfor %}
+
+          <!-- Totals -->
+          <div class="summary-row">
+            <div style="display:flex;gap:16px;">
+              <div style="font-size:13px;">
+                <span style="color:var(--muted);">Calories: </span>
+                <span style="font-weight:600;color:var(--accent2);">{{ log.total_kcal }} kcal</span>
+              </div>
+              <div style="font-size:13px;">
+                <span style="color:var(--muted);">Protein: </span>
+                <span style="font-weight:600;color:var(--green);">{{ log.total_protein }}g</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+      {% endfor %}
+
+    {% else %}
+      <div class="empty-state card">
+        <i class="fa-solid fa-bowl-food"></i>
+        <p style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:8px;">No meals logged yet</p>
+        <p>Upload your first meal photo to get started!</p>
+      </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const input   = document.getElementById('img-input');
+const preview = document.getElementById('preview-img');
+const wrap    = document.getElementById('preview-wrap');
+const form    = document.getElementById('upload-form');
+const spinner = document.getElementById('spinner');
+const dropZone= document.getElementById('drop-zone');
+const submitBtn=document.getElementById('submit-btn');
+
+function showPreview(file) {
+  preview.src = URL.createObjectURL(file);
+  wrap.style.display  = 'block';
+  dropZone.style.display = 'none';
+}
+
+function removePreview() {
+  wrap.style.display  = 'none';
+  dropZone.style.display = 'block';
+  input.value = '';
+  preview.src = '';
+}
+
+input.addEventListener('change', () => {
+  if (input.files[0]) showPreview(input.files[0]);
+});
+
+dropZone.addEventListener('dragover', e => {
+  e.preventDefault();
+  dropZone.style.borderColor = 'var(--accent)';
+  dropZone.style.background  = 'rgba(108,99,255,.08)';
+});
+dropZone.addEventListener('dragleave', () => {
+  dropZone.style.borderColor = 'var(--border)';
+  dropZone.style.background  = 'var(--bg2)';
+});
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.style.borderColor = 'var(--border)';
+  dropZone.style.background  = 'var(--bg2)';
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) {
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+    showPreview(file);
+  }
+});
+
+form.addEventListener('submit', () => {
+  if (!input.files[0]) return;
+  spinner.style.display = 'block';
+  submitBtn.disabled    = true;
+  submitBtn.innerHTML   = '<i class="fa-solid fa-circle-notch fa-spin"></i> Processing...';
+  wrap.style.display    = 'none';
+});
+</script>
+{% endblock %}

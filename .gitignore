@@ -1,0 +1,15 @@
+# Virtual Environment
+.venv/
+
+# Dataset
+Food-Images-1/
+
+# Media Files
+media/
+
+# Python Cache
+__pycache__/
+*.pyc
+
+# Database
+db.sqlite3

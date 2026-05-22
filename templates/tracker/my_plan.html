@@ -1,0 +1,204 @@
+{% extends 'base.html' %}
+{% block title %}My Plan — FitAI{% endblock %}
+{% block nav_plan %}active{% endblock %}
+{% block extra_css %}
+<style>
+.tabs { display:flex; gap:8px; margin-bottom:24px; }
+.tab-btn {
+  padding:9px 22px; border-radius:10px; border:1px solid var(--border);
+  background:transparent; color:var(--muted); font-size:14px;
+  font-weight:500; cursor:pointer; transition:all .2s; font-family:'Inter',sans-serif;
+}
+.tab-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+.tab-panel { display:none; }
+.tab-panel.active { display:block; }
+.meal-card {
+  background:var(--bg2); border:1px solid var(--border);
+  border-radius:var(--radius); padding:20px; margin-bottom:14px;
+  display:flex; align-items:center; gap:18px;
+}
+.meal-icon {
+  width:50px; height:50px; border-radius:12px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center; font-size:22px;
+}
+.meal-info { flex:1; }
+.meal-info .meal-name { font-weight:600; font-size:15px; margin-bottom:4px; }
+.meal-info .meal-time { font-size:12px; color:var(--muted); }
+.meal-macros { display:flex; gap:12px; margin-top:8px; }
+.macro-pill { font-size:12px; padding:3px 10px; border-radius:99px; font-weight:500; }
+.day-card {
+  background:var(--bg2); border:1px solid var(--border);
+  border-radius:var(--radius); margin-bottom:14px; overflow:hidden;
+}
+.day-header {
+  padding:14px 20px; background:var(--card);
+  border-bottom:1px solid var(--border);
+  display:flex; justify-content:space-between; align-items:center;
+}
+.day-header .day-name { font-weight:600; font-size:15px; }
+.day-header .focus-tag { font-size:12px; color:var(--muted); }
+.ex-row {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:12px 20px; border-bottom:1px solid var(--border);
+}
+.ex-row:last-child { border-bottom:none; }
+.ex-name { font-size:14px; font-weight:500; }
+.ex-sets { font-size:13px; color:var(--muted); }
+.sets-badge { background:rgba(108,99,255,.15); color:var(--accent2); padding:3px 12px; border-radius:99px; font-size:12px; font-weight:600; }
+.macro-bar-wrap { margin-bottom:24px; }
+.macro-label { display:flex; justify-content:space-between; font-size:13px; margin-bottom:6px; }
+.macro-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; margin-bottom:20px; }
+.macro-card { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:16px; text-align:center; }
+.macro-card .mv { font-size:24px; font-weight:700; }
+.macro-card .ml { font-size:12px; color:var(--muted); margin-top:4px; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>My Plan</h1>
+  <p>Your personalised diet and workout plan</p>
+</div>
+
+<div class="macro-row">
+  <div class="macro-card">
+    <div class="mv" style="color:var(--accent2);">{{ calorie_target }}</div>
+    <div class="ml">kcal / day</div>
+  </div>
+  <div class="macro-card">
+    <div class="mv" style="color:var(--green);">{{ macros.protein_g }}g</div>
+    <div class="ml">protein</div>
+  </div>
+  <div class="macro-card">
+    <div class="mv" style="color:var(--amber);">{{ macros.carbs_g }}g</div>
+    <div class="ml">carbs</div>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('diet',this)">
+    <i class="fa-solid fa-utensils"></i> Diet plan
+  </button>
+  <button class="tab-btn" onclick="switchTab('workout',this)">
+    <i class="fa-solid fa-dumbbell"></i> Workout plan
+  </button>
+</div>
+
+<!-- Diet tab -->
+<div class="tab-panel active" id="tab-diet">
+  {% for meal_type, meal in meals_with_recipes.items %}
+  <div class="meal-card" style="flex-direction:column;align-items:stretch;gap:0;">
+    <div style="display:flex;align-items:center;gap:18px;margin-bottom:{% if meal.recipe %}14px{% else %}0{% endif %};">
+      <div class="meal-icon
+        {% if meal_type == 'breakfast' %}icon-amber
+        {% elif meal_type == 'lunch' %}icon-green
+        {% elif meal_type == 'snack' %}icon-purple
+        {% else %}icon-red{% endif %}">
+        {% if meal_type == 'breakfast' %}<i class="fa-solid fa-sun"></i>
+        {% elif meal_type == 'lunch' %}<i class="fa-solid fa-bowl-food"></i>
+        {% elif meal_type == 'snack' %}<i class="fa-solid fa-apple-whole"></i>
+        {% elif meal_type == 'post_workout' %}<i class="fa-solid fa-bottle-water"></i>
+        {% else %}<i class="fa-solid fa-moon"></i>{% endif %}
+      </div>
+      <div class="meal-info" style="flex:1;">
+        <div class="meal-name">{{ meal.name }}</div>
+        <div class="meal-time"><i class="fa-regular fa-clock" style="margin-right:4px;"></i>{{ meal.time }}</div>
+        <div class="meal-macros">
+          <span class="macro-pill badge-amber">{{ meal.kcal }} kcal</span>
+          <span class="macro-pill badge-green">{{ meal.protein }}g protein</span>
+          <span class="macro-pill badge-purple">{{ meal_type|title }}</span>
+        </div>
+      </div>
+      {% if meal.recipe %}
+      <button class="btn btn-ghost" style="font-size:12px;padding:7px 14px;"
+        onclick="toggleRecipe('recipe-{{ forloop.counter }}')">
+        <i class="fa-solid fa-book-open"></i> Recipe
+      </button>
+      {% endif %}
+    </div>
+
+    {% if meal.recipe %}
+    <div id="recipe-{{ forloop.counter }}" style="display:none;background:var(--bg3);border-radius:10px;padding:16px;margin-top:4px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">Ingredients</div>
+          {% for ing in meal.recipe.ingredients %}
+          <div style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:13px;">
+            <i class="fa-solid fa-circle" style="font-size:5px;color:var(--accent);margin-top:6px;flex-shrink:0;"></i>
+            {{ ing }}
+          </div>
+          {% endfor %}
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;">Steps</div>
+          {% for step in meal.recipe.steps %}
+          <div style="display:flex;gap:10px;padding:5px 0;border-bottom:1px solid var(--border);font-size:13px;">
+            <span style="min-width:20px;height:20px;border-radius:50%;background:rgba(108,99,255,.2);color:var(--accent2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;">{{ forloop.counter }}</span>
+            {{ step }}
+          </div>
+          {% endfor %}
+          <div style="margin-top:10px;font-size:12px;color:var(--muted);">
+            <i class="fa-regular fa-clock"></i> {{ meal.recipe.prep_time }}
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  <div class="card" style="margin-top:8px;">
+    <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:600;">
+      <span>Total</span>
+      <span style="color:var(--accent2);">{{ diet.actual_kcal }} kcal &nbsp;|&nbsp;
+        <span style="color:var(--green);">{{ diet.actual_protein }}g protein</span>
+      </span>
+    </div>
+  </div>
+</div>
+<!-- Workout tab -->
+<div class="tab-panel" id="tab-workout">
+  {% for day, data in workout.items %}
+  <div class="day-card">
+    <div class="day-header">
+      <span class="day-name">{{ day }}</span>
+      <span class="focus-tag">
+        {% if data.exercises %}
+          <span class="badge badge-purple">{{ data.focus }}</span>
+        {% else %}
+          <span class="badge badge-green">Rest day</span>
+        {% endif %}
+      </span>
+    </div>
+    {% if data.exercises %}
+      {% for ex in data.exercises %}
+      <div class="ex-row">
+        <div>
+          <div class="ex-name">{{ ex.name }}</div>
+          <div class="ex-sets">{{ ex.sets }} sets</div>
+        </div>
+        <span class="sets-badge">{{ ex.reps }} reps</span>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div style="padding:16px 20px;color:var(--muted);font-size:14px;">
+        <i class="fa-solid fa-bed" style="margin-right:8px;"></i>Rest, recover, grow
+      </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  btn.classList.add('active');
+}
+function toggleRecipe(id) {
+  const el = document.getElementById(id);
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+</script>
+{% endblock %}
